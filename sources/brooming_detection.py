@@ -122,9 +122,24 @@ class BroomDetector:
         boxes = self.export_frame(frame_resized)
         for box in boxes:
             x1, y1, x2, y2, class_id = box
-            cvzone.cornerRect(frame_resized, (x1, y1, x2 - x1, y2 - y1), l=10, rt=0, t=2, colorC=(0, 255, 255))
-            cvzone.putTextRect(frame_resized, f"{class_id}", (x1, y1), scale=1, thickness=2, offset=5)
+            overlap_results = self.check_overlap(x1, y1, x2, y2)
+            if any(overlap_results):
+                cvzone.cornerRect(frame_resized, (x1, y1, x2 - x1, y2 - y1), l=10, rt=0, t=2, colorC=(0, 255, 255))
+                cvzone.putTextRect(frame_resized, f"{class_id} {overlap_results}", (x1, y1), scale=1, thickness=2, offset=5)
+            else:
+                print(f"No overlap found for {class_id}")
         return frame_resized
+
+    def check_overlap(self, x1, y1, x2, y2):
+        main_box = Polygon([(x1, y1), (x2, y1), (x2, y2), (x1, y2)])
+        overlap_results = []
+        for roi in self.rois:
+            other_polygon = Polygon(roi)
+            intersection_area = main_box.intersection(other_polygon).area
+            union_area = main_box.union(other_polygon).area
+            iou = intersection_area / union_area if union_area != 0 else 0
+            overlap_results.append(iou > 0)
+        return overlap_results
 
     def main(self):
         skip_frames = 2
