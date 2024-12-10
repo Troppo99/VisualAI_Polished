@@ -1,5 +1,6 @@
 import math
 import cv2
+import torch
 from ultralytics import YOLO
 import json
 from shapely.geometry import Polygon
@@ -21,6 +22,8 @@ class BroomDetector:
         self.rois, self.ip_camera = self.camera_config()
         self.choose_video_source()
         self.prev_frame_time = 0
+        self.model = YOLO("model/broom6l.pt").to("cuda")
+        self.model.overrides["verbose"] = False
 
     def camera_config(self):
         with open("data/bd_config.json", "r") as f:
@@ -100,9 +103,25 @@ class BroomDetector:
                     pass
             cap.release()
 
+    def export_frame(self, frame):
+        with torch.no_grad():
+            results = self.model(frame, stream=True, imgsz=self.process_size[0])
+        boxes = []
+        for result in results:
+            for box in result.boxes:
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                conf = box.conf[0]
+                if conf > self.confidence_threshold:
+                    boxes.append((x1, y1, x2, y2))
+        return boxes
+
     def process_frame(self, frame):
         frame_resized = cv2.resize(frame, self.process_size)
         self.draw_rois(frame_resized)
+        boxes = self.export_frame(frame_resized)
+        for box in boxes:
+            x1, y1, x2, y2 = box
+            cv2.rectangle(frame_resized, (x1, y1), (x2, y2), (0, 255, 0), 2)
         return frame_resized
 
     def main(self):
@@ -165,9 +184,9 @@ class BroomDetector:
 
 if __name__ == "__main__":
     detector = BroomDetector(
-        confidence_threshold=0.5,
-        camera_name="OFFICE1",
-        # video_source="videos/bd_test.mp4",
+        confidence_threshold=0,
+        camera_name="OFFICE3",
+        video_source="videos/bd_test3.mp4",
         window_size=(320, 240),
     )
     detector.main()
