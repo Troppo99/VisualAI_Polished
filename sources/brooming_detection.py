@@ -111,8 +111,9 @@ class BroomDetector:
             for box in result.boxes:
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 conf = box.conf[0]
+                class_id = self.model.names[int(box.cls[0])]
                 if conf > self.confidence_threshold:
-                    boxes.append((x1, y1, x2, y2))
+                    boxes.append((x1, y1, x2, y2, class_id))
         return boxes
 
     def process_frame(self, frame):
@@ -120,8 +121,9 @@ class BroomDetector:
         self.draw_rois(frame_resized)
         boxes = self.export_frame(frame_resized)
         for box in boxes:
-            x1, y1, x2, y2 = box
-            cv2.rectangle(frame_resized, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            x1, y1, x2, y2, class_id = box
+            cvzone.cornerRect(frame_resized, (x1, y1, x2 - x1, y2 - y1), l=10, rt=0, t=2, colorC=(0, 255, 255))
+            cvzone.putTextRect(frame_resized, f"{class_id}", (x1, y1), scale=1, thickness=2, offset=5)
         return frame_resized
 
     def main(self):
