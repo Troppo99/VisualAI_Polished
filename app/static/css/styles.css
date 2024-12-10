@@ -1,0 +1,46 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  background: #f5f5f5;
+  color: #333;
+}
+
+header {
+  background: #4caf50;
+  color: #fff;
+  padding: 20px;
+  text-align: center;
+}
+
+.video-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 20px;
+}
+
+.video-container img {
+  width: 640px;
+  /* Atur ukuran video di sini */
+  height: auto;
+  border: 2px solid #ccc;
+  background: #000;
+}
+
+.controls {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.controls button {
+  padding: 10px 20px;
+  margin: 0 5px;
+  background: #4caf50;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+}
+
+.controls button:hover {
+  background: #45a049;
+}
