@@ -4,6 +4,7 @@ import torch
 from ultralytics import YOLO
 import json
 from shapely.geometry import Polygon
+from shapely.ops import unary_union
 import os
 import time
 import cvzone
@@ -24,6 +25,14 @@ class BroomDetector:
         self.prev_frame_time = 0
         self.model = YOLO("model/broom6l.pt").to("cuda")
         self.model.overrides["verbose"] = False
+        if len(self.rois) > 1:
+            self.union_roi = unary_union(self.rois)
+        elif len(self.rois) == 1:
+            self.union_roi = self.rois[0]
+        else:
+            self.union_roi = None
+        self.trail_map_polygon = Polygon()
+        self.trail_map_mask = np.zeros((self.process_size[1], self.process_size[0], 3), dtype=np.uint8)
 
     def camera_config(self):
         with open("data/bd_config.json", "r") as f:
@@ -120,15 +129,57 @@ class BroomDetector:
         frame_resized = cv2.resize(frame, self.process_size)
         self.draw_rois(frame_resized)
         boxes = self.export_frame(frame_resized)
+        output_frame = frame_resized.copy()
         for box in boxes:
             x1, y1, x2, y2, class_id = box
             overlap_results = self.check_overlap(x1, y1, x2, y2)
             if any(overlap_results):
-                cvzone.cornerRect(frame_resized, (x1, y1, x2 - x1, y2 - y1), l=10, rt=0, t=2, colorC=(0, 255, 255))
-                cvzone.putTextRect(frame_resized, f"{class_id} {overlap_results}", (x1, y1), scale=1, thickness=2, offset=5)
+                obj_box_polygon = Polygon([(x1, y1), (x2, y1), (x2, y2), (x1, y2)])
+                if self.union_roi is not None:
+                    current_area = obj_box_polygon.intersection(self.union_roi)
+                else:
+                    current_area = obj_box_polygon
+
+                if not current_area.is_empty:
+                    new_area = current_area.difference(self.trail_map_polygon)
+
+                    if not new_area.is_empty:
+                        self.trail_map_polygon = self.trail_map_polygon.union(new_area)
+                        self.draw_polygon_on_mask(new_area, self.trail_map_mask, color=(0, 255, 0))
+
+                cvzone.cornerRect(output_frame, (x1, y1, x2 - x1, y2 - y1), l=10, rt=0, t=2, colorC=(0, 255, 255))
+                cvzone.putTextRect(output_frame, f"{class_id} {overlap_results}", (x1, y1), scale=1, thickness=2, offset=5)
             else:
                 print(f"No overlap found for {class_id}")
-        return frame_resized
+        alpha = 0.5
+        output_frame = cv2.addWeighted(output_frame, 1.0, self.trail_map_mask, alpha, 0)
+        return output_frame
+
+    def draw_polygon_on_mask(self, polygon, mask, color=(0, 255, 0)):
+        if polygon.is_empty:
+            return
+
+        if polygon.geom_type == "Polygon":
+            polygons = [polygon]
+        elif polygon.geom_type == "MultiPolygon":
+            polygons = polygon.geoms
+        elif polygon.geom_type == "GeometryCollection":
+            polygons = []
+            for geom in polygon.geoms:
+                if geom.geom_type in ["Polygon", "MultiPolygon"]:
+                    if geom.geom_type == "Polygon":
+                        polygons.append(geom)
+                    elif geom.geom_type == "MultiPolygon":
+                        polygons.extend(geom.geoms)
+        else:
+            return
+
+        for poly in polygons:
+            if poly.is_empty:
+                continue
+            pts = np.array(poly.exterior.coords, np.int32)
+            pts = pts.reshape((-1, 1, 2))
+            cv2.fillPoly(mask, [pts], color)
 
     def check_overlap(self, x1, y1, x2, y2):
         main_box = Polygon([(x1, y1), (x2, y1), (x2, y2), (x1, y2)])
