@@ -1,0 +1,6 @@
+.venv/*
+model/*
+videos/*
+.draft.py
+__pycache__/*
+
