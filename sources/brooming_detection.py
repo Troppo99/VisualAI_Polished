@@ -8,6 +8,7 @@ import time
 import cvzone
 import threading
 import queue
+import numpy as np
 
 
 class BroomDetector:
@@ -44,6 +45,16 @@ class BroomDetector:
             else:
                 print(f"Not enough points to form a polygon, skipping.")
         return scaled_rois, ip
+
+    def draw_rois(self, frame):
+        if not self.rois:
+            return
+        for roi in self.rois:
+            if roi.geom_type != "Polygon":
+                continue
+            pts = np.array(roi.exterior.coords, np.int32)
+            pts = pts.reshape((-1, 1, 2))
+            cv2.polylines(frame, [pts], True, (0, 255, 0), 2)
 
     def choose_video_source(self):
         if self.video_source is None:
@@ -91,6 +102,7 @@ class BroomDetector:
 
     def process_frame(self, frame):
         frame_resized = cv2.resize(frame, self.process_size)
+        self.draw_rois(frame_resized)
         return frame_resized
 
     def main(self):
