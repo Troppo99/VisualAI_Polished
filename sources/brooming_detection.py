@@ -34,6 +34,11 @@ class BroomDetector:
         self.trail_map_polygon = Polygon()
         self.trail_map_mask = np.zeros((self.process_size[1], self.process_size[0], 3), dtype=np.uint8)
 
+        self.last_detection_time = None
+        self.trail_map_start_time = None
+        self.start_run_time = time.time()
+        self.capture_done = False
+
     def camera_config(self):
         with open("data/bd_config.json", "r") as f:
             config = json.load(f)
@@ -52,10 +57,6 @@ class BroomDetector:
                 polygon = Polygon(scaled_group)
                 if polygon.is_valid:
                     scaled_rois.append(polygon)
-                else:
-                    print(f"Invalid polygon")
-            else:
-                print(f"Not enough points to form a polygon, skipping.")
         return scaled_rois, ip
 
     def draw_rois(self, frame):
@@ -76,7 +77,6 @@ class BroomDetector:
             self.video_fps = None
             self.is_local_video = False
             self.video_source = f"rtsp://admin:oracle2015@{self.ip_camera}:554/Streaming/Channels/1"
-            print("Using RTSP")
         else:
             self.video_source = self.video_source
             if os.path.isfile(self.video_source):
@@ -86,11 +86,9 @@ class BroomDetector:
                 if not self.video_fps or math.isnan(self.video_fps):
                     self.video_fps = 25
                 cap.release()
-                print("Using local video")
             else:
                 self.is_local_video = False
                 self.video_fps = None
-                print("Video local is not found!")
                 exit()
 
     def capture_frame(self):
@@ -130,10 +128,12 @@ class BroomDetector:
         self.draw_rois(frame_resized)
         boxes = self.export_frame(frame_resized)
         output_frame = frame_resized.copy()
+        detected = False
         for box in boxes:
             x1, y1, x2, y2, class_id = box
             overlap_results = self.check_overlap(x1, y1, x2, y2)
             if any(overlap_results):
+                detected = True
                 obj_box_polygon = Polygon([(x1, y1), (x2, y1), (x2, y2), (x1, y2)])
                 if self.union_roi is not None:
                     current_area = obj_box_polygon.intersection(self.union_roi)
@@ -149,11 +149,42 @@ class BroomDetector:
 
                 cvzone.cornerRect(output_frame, (x1, y1, x2 - x1, y2 - y1), l=10, rt=0, t=2, colorC=(0, 255, 255))
                 cvzone.putTextRect(output_frame, f"{class_id} {overlap_results}", (x1, y1), scale=1, thickness=2, offset=5)
+
+        overlap_percentage = 0
+        if self.union_roi and not self.union_roi.is_empty:
+            overlap_percentage = (self.trail_map_polygon.area / self.union_roi.area) * 100
+
+        current_time = time.time()
+        if detected:
+            self.last_detection_time = current_time
+            if overlap_percentage >= 50 and self.trail_map_start_time is None:
+                self.trail_map_start_time = current_time
+        else:
+            if self.last_detection_time is None:
+                time_since_last_det = current_time - self.start_run_time
             else:
-                print(f"No overlap found for {class_id}")
+                time_since_last_det = current_time - self.last_detection_time
+
+            if overlap_percentage < 10 and time_since_last_det > 10:
+                self.reset_trail_map()
+            elif overlap_percentage < 50 and time_since_last_det > 60:
+                self.reset_trail_map()
+
+        if overlap_percentage >= 50 and self.trail_map_start_time is not None:
+            if current_time - self.trail_map_start_time > 60 and not self.capture_done:
+                print("capture, save, and send")
+                self.capture_done = True
+
         alpha = 0.5
         output_frame = cv2.addWeighted(output_frame, 1.0, self.trail_map_mask, alpha, 0)
-        return output_frame
+        cvzone.putTextRect(output_frame, f"Overlap: {overlap_percentage:.2f}%", (10, 110), scale=1, thickness=2, offset=5)
+        return output_frame, overlap_percentage
+
+    def reset_trail_map(self):
+        self.trail_map_polygon = Polygon()
+        self.trail_map_mask = np.zeros((self.process_size[1], self.process_size[0], 3), dtype=np.uint8)
+        self.trail_map_start_time = None
+        self.capture_done = False
 
     def draw_polygon_on_mask(self, polygon, mask, color=(0, 255, 0)):
         if polygon.is_empty:
@@ -198,6 +229,9 @@ class BroomDetector:
         window_name = "Brooming Detection"
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(window_name, self.window_size[0], self.window_size[1])
+        ended_normally = False
+        final_overlap = 0
+
         if self.video_fps is None:
             self.frame_thread = threading.Thread(target=self.capture_frame)
             self.frame_thread.daemon = True
@@ -216,11 +250,12 @@ class BroomDetector:
                 time_diff = current_time - self.prev_frame_time
                 self.fps = 1 / time_diff if time_diff > 0 else 0
                 self.prev_frame_time = current_time
-                frame_resized = self.process_frame(frame)
+                frame_resized, final_overlap = self.process_frame(frame)
                 cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
                 cv2.imshow(window_name, frame_resized)
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord("n") or key == ord("N"):
+                    ended_normally = True
                     self.stop_event.set()
                     break
             cv2.destroyAllWindows()
@@ -230,7 +265,10 @@ class BroomDetector:
             frame_delay = int(1000 / self.video_fps)
             while cap.isOpened():
                 start_time = time.time()
-                _, frame = cap.read()
+                ret, frame = cap.read()
+                if not ret:
+                    ended_normally = True
+                    break
                 frame_count += 1
                 if frame_count % skip_frames != 0:
                     continue
@@ -238,16 +276,26 @@ class BroomDetector:
                 time_diff = current_time - self.prev_frame_time
                 self.fps = 1 / time_diff if time_diff > 0 else 0
                 self.prev_frame_time = current_time
-                frame_resized = self.process_frame(frame)
+                frame_resized, final_overlap = self.process_frame(frame)
                 cvzone.putTextRect(frame_resized, f"FPS: {int(self.fps)}", (10, 75), scale=1, thickness=2, offset=5)
                 cv2.imshow(window_name, frame_resized)
                 processing_time = (time.time() - start_time) * 1000
                 adjusted_delay = max(int(frame_delay - processing_time), 1)
                 key = cv2.waitKey(adjusted_delay) & 0xFF
                 if key == ord("n") or key == ord("N"):
+                    ended_normally = True
                     break
             cap.release()
             cv2.destroyAllWindows()
+
+        if ended_normally:
+            if final_overlap >= 50:
+                print("capture, save, and send (pekerjaan selesai)")
+            else:
+                if final_overlap >= 30:
+                    print("capture, save, and send (menyapu tidak selesai)")
+                else:
+                    print("capture, save, and send (tidak menyapu)")
 
 
 if __name__ == "__main__":
