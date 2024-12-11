@@ -39,7 +39,7 @@
   <!-- hero section start-->
   <section class="hero" id="home">
     <main class="content">
-      <h1>Let CCTV Effectively Finalize<span> The Company with AI</span></h1>
+      <h1>Let <span class="cctv">CCTV</span> Effectively Finalize<span> The Company with AI</span></h1>
       <p>
         This project is developed to assist 5S supervisors in monitoring the condition of the work area using AI.
       </p>
@@ -51,10 +51,15 @@
     <h2><span>AI</span> Streaming</h2>
     <div class="row">
       <div class="streaming-img">
-        <video width="640" height="320" autoplay loop muted>
-          <source src="../static/videos/video1.mp4" type="video/mp4">
-          Your browser does not support the video tag.
-        </video>
+        <div class="video-container">
+          <video width="640" height="320" autoplay loop muted>
+            <source src="../static/videos/video1.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+          </video>
+          <button class="fullscreen-btn" id="fullscreen-btn">
+            <i data-feather="maximize"></i>
+          </button>
+        </div>
       </div>
       <div class="content">
         <!-- Konten tambahan jika diperlukan -->
