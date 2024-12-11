@@ -3,4 +3,5 @@ model/*
 videos/*
 .draft.py
 __pycache__/*
-
+app/static/videos/*
+app/static/images/*

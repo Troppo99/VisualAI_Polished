@@ -13,17 +13,16 @@ document.addEventListener("click", function (e) {
   }
 });
 
-// Fullscreen functionality
+// Fullscreen functionality for multiple videos
 document.addEventListener("DOMContentLoaded", () => { // Pastikan DOM sudah siap
-  const fullscreenBtn = document.getElementById("fullscreen-btn");
-  
-  if (fullscreenBtn) { // Cek apakah tombol ada
-    const videoContainer = fullscreenBtn.closest(".video-container");
-    const video = videoContainer.querySelector("video");
+  const fullscreenButtons = document.querySelectorAll(".fullscreen-btn");
 
-    fullscreenBtn.addEventListener("click", () => {
-      console.log("Fullscreen button clicked."); // Debugging
+  fullscreenButtons.forEach(button => {
+    button.addEventListener("click", () => {
+      const videoContainer = button.closest(".video-container");
+
       if (!document.fullscreenElement) {
+        // Meminta fullscreen pada videoContainer
         if (videoContainer.requestFullscreen) {
           videoContainer.requestFullscreen();
         } else if (videoContainer.webkitRequestFullscreen) { /* Safari */
@@ -31,27 +30,30 @@ document.addEventListener("DOMContentLoaded", () => { // Pastikan DOM sudah siap
         } else if (videoContainer.msRequestFullscreen) { /* IE11 */
           videoContainer.msRequestFullscreen();
         }
+
         // Ubah ikon ke minimize saat fullscreen
-        fullscreenBtn.querySelector("i").setAttribute("data-feather", "minimize");
+        button.querySelector("i").setAttribute("data-feather", "minimize");
         feather.replace(); // Render ulang ikon
       } else {
+        // Keluar dari fullscreen
         if (document.exitFullscreen) {
           document.exitFullscreen();
         }
-        // Kembali ke ikon maximize saat keluar fullscreen
-        fullscreenBtn.querySelector("i").setAttribute("data-feather", "maximize");
-        feather.replace(); // Render ulang ikon
-      }
-    });
 
-    // Listener untuk perubahan fullscreen dari sumber lain (misalnya, tombol Esc)
-    document.addEventListener("fullscreenchange", () => {
-      if (!document.fullscreenElement) {
-        fullscreenBtn.querySelector("i").setAttribute("data-feather", "maximize");
+        // Kembali ke ikon maximize saat keluar fullscreen
+        button.querySelector("i").setAttribute("data-feather", "maximize");
         feather.replace(); // Render ulang ikon
       }
     });
-  } else {
-    console.error("Fullscreen button with ID 'fullscreen-btn' not found.");
-  }
+  });
+
+  // Listener untuk perubahan fullscreen dari sumber lain (misalnya, tombol Esc)
+  document.addEventListener("fullscreenchange", () => {
+    fullscreenButtons.forEach(button => {
+      if (!document.fullscreenElement) {
+        button.querySelector("i").setAttribute("data-feather", "maximize");
+        feather.replace(); // Render ulang ikon
+      }
+    });
+  });
 });
