@@ -197,11 +197,8 @@ body {
 .streaming .row .streaming-img video {
   width: 100%;
   max-width: 640px;
-  /* Menentukan lebar maksimum */
   height: auto;
-  /* Menjaga rasio aspek */
   border-radius: 1rem;
-  /* Opsional: Memberikan sudut melengkung */
 }
 
 /* report section */
