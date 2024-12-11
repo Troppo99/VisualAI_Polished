@@ -1,16 +1,14 @@
-document.addEventListener("DOMContentLoaded", function () {
-  const runBtn = document.getElementById("runBtn");
-  const stopBtn = document.getElementById("stopBtn");
+// toggle class active
+const navbarNav = document.querySelector(".navbar-nav");
+document.querySelector("#hamburger-menu").onclick = () => {
+  navbarNav.classList.toggle("active");
+};
 
-  runBtn.addEventListener("click", function () {
-    // Misalnya mengirim request ke server untuk start video (jika awalnya stop)
-    // fetch('/start_video', {method: 'POST'});
-    alert("Run clicked. (Anda bisa implementasi request ke server di sini)");
-  });
+// klik untuk hide sidebar
+const hamburger = document.querySelector("#hamburger-menu");
 
-  stopBtn.addEventListener("click", function () {
-    // Misalnya mengirim request ke server untuk stop video
-    // fetch('/stop_video', {method: 'POST'});
-    alert("Stop clicked. (Anda bisa implementasi request ke server di sini)");
-  });
+document.addEventListener("click", function (e) {
+  if (!hamburger.contains(e.target) && !navbarNav.contains(e.target)) {
+    navbarNav.classList.remove("active");
+  }
 });
